@@ -13,4 +13,11 @@ export class InventoryController {
     this.logger.log(`Received payment.processed event for order: ${data.orderId}`);
     await this.inventoryService.reserveStock(data);
   }
+
+  @EventPattern('order.failed')
+  async handleOrderFailed(@Payload() data: any) {
+    this.logger.log(`Received order.failed for order: ${data.orderId}. Releasing stock if any.`);
+    await this.inventoryService.releaseStock(data.orderId);
+  }
 }
+

@@ -22,16 +22,42 @@ export class OrdersService {
   ) {}
 
   async completeOrder(orderId: string) {
-    await this.ordersRepository.update(orderId, { status: OrderStatus.COMPLETED });
+    await this.updateStatus(orderId, OrderStatus.COMPLETED, { status: OrderStatus.COMPLETED });
+  }
+
+  async failOrder(orderId: string, reason: string) {
+    await this.updateStatus(orderId, OrderStatus.FAILED, { reason });
+  }
+
+  async compensateOrder(orderId: string, reason: string) {
+    const order = await this.findOne(orderId);
+    if (!order) return;
+
+    await this.updateStatus(orderId, OrderStatus.COMPENSATING, { reason });
+
+    // Trigger compensation: Refund Payment
+    this.client.emit('payment.refund', {
+      orderId,
+      amount: Number(order.total_amount),
+      reason: `Inventory failure: ${reason}`,
+      eventId: uuidv4(),
+      timestamp: new Date(),
+    });
+  }
+
+  async updateStatus(orderId: string, status: OrderStatus, metadata: any = {}) {
+    await this.ordersRepository.update(orderId, { status });
     
+    // Log to Event Store
     const orderEvent = this.eventsRepository.create({
       order_id: orderId,
-      event_type: 'OrderCompleted',
-      event_data: { orderId, status: OrderStatus.COMPLETED },
+      event_type: `OrderStatusChanged:${status}`,
+      event_data: { orderId, status, ...metadata },
     });
     
     await this.eventsRepository.save(orderEvent);
   }
+
 
   async create(createOrderDto: CreateOrderDto) {
     const queryRunner = this.dataSource.createQueryRunner();

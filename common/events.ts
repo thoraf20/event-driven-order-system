@@ -37,3 +37,16 @@ export interface InventoryReservationFailedPayload {
     quantity: number;
   }[];
 }
+
+export interface PaymentRefundPayload {
+  orderId: string;
+  amount: number;
+  reason: string;
+}
+
+export interface PaymentRefundedPayload {
+  orderId: string;
+  paymentId: string;
+  refundTransactionId: string;
+}
+

@@ -13,4 +13,11 @@ export class PaymentsController {
     this.logger.log(`Received order.created event for order: ${data.orderId}`);
     await this.paymentsService.processOrderCreated(data);
   }
+
+  @EventPattern('payment.refund')
+  async handlePaymentRefund(@Payload() data: any) {
+    this.logger.log(`Received payment.refund for order: ${data.orderId}`);
+    await this.paymentsService.processRefund(data);
+  }
 }
+

@@ -50,7 +50,36 @@ export class PaymentsService {
       this.logger.log(`Payment processed successfully for order: ${payload.orderId}`);
     } catch (error) {
       this.logger.error(`Payment failed for order ${payload.orderId}: ${error.message}`);
-      // In a real app, emit payment.failed here
+      
+      this.client.emit('payment.failed', {
+        orderId: payload.orderId,
+        reason: error.message,
+        eventId: uuidv4(),
+        timestamp: new Date(),
+      });
+    }
+  }
+
+  async processRefund(payload: any) {
+    this.logger.log(`Refunding payment for order: ${payload.orderId}`);
+    
+    try {
+      await this.paymentsRepository.update(
+        { order_id: payload.orderId },
+        { status: PaymentStatus.REFUNDED }
+      );
+
+      this.client.emit('payment.refunded', {
+        orderId: payload.orderId,
+        refundTransactionId: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
+        eventId: uuidv4(),
+        timestamp: new Date(),
+      });
+
+      this.logger.log(`Payment refunded for order: ${payload.orderId}`);
+    } catch (error) {
+      this.logger.error(`Refund failed for order ${payload.orderId}: ${error.message}`);
     }
   }
 }
+

@@ -63,9 +63,26 @@ export class InventoryService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Stock reservation failed for order ${payload.orderId}: ${error.message}`);
-      // Emit inventory.reservation_failed here
+      
+      this.client.emit('inventory.reservation_failed', {
+        orderId: payload.orderId,
+        reason: error.message,
+        items: [], // In a real app, we'd pass the items that failed
+        eventId: uuidv4(),
+        timestamp: new Date(),
+      });
     } finally {
       await queryRunner.release();
     }
   }
+
+  async releaseStock(orderId: string) {
+    this.logger.log(`Releasing stock for order: ${orderId}`);
+    await this.reservationsRepository.update(
+      { order_id: orderId },
+      { status: InventoryStatus.RELEASED }
+    );
+    this.logger.log(`Stock released for order: ${orderId}`);
+  }
 }
+
