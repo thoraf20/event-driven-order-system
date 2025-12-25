@@ -1,6 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Scope } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { REQUEST } from '@nestjs/core';
+import { Request } from 'express';
+
 import { OrderEntity } from '../entities/order.entity';
 import { OrderItemEntity } from '../entities/order-item.entity';
 import { OrderEventEntity } from '../entities/order-event.entity';
@@ -9,7 +12,7 @@ import { OrderStatus, OrderCreatedPayload } from '@app/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { v4 as uuidv4 } from 'uuid';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class OrdersService {
   constructor(
     @InjectRepository(OrderEntity)
@@ -19,6 +22,8 @@ export class OrdersService {
     private dataSource: DataSource,
     @Inject('ORDER_SERVICE') 
     private client: ClientProxy,
+    @Inject(REQUEST) 
+    private readonly request: Request,
   ) {}
 
   async completeOrder(orderId: string) {
@@ -107,12 +112,15 @@ export class OrdersService {
 
       await queryRunner.manager.save(orderEvent);
 
+      const correlationId = this.request.headers['x-correlation-id'] as string;
+
       this.client.emit('order.created', {
         ...eventPayload,
         eventId: uuidv4(),
         timestamp: new Date(),
-        correlationId: uuidv4(), // In a real app, this would be passed from the request
+        correlationId,
       });
+
 
       await queryRunner.commitTransaction();
       return savedOrder;

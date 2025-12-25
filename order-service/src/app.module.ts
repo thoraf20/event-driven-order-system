@@ -1,8 +1,14 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LoggerModule } from 'nestjs-pino';
+import { TerminusModule } from '@nestjs/terminus';
 import { OrdersModule } from './orders/orders.module';
 import { SagaTimeoutService } from './saga-timeout.service';
+import { CorrelationMiddleware } from './middleware/correlation.middleware';
+import { HealthController } from './health/health.controller';
+
+
 import { OrderEntity } from './entities/order.entity';
 import { OrderItemEntity } from './entities/order-item.entity';
 import { OrderEventEntity } from './entities/order-event.entity';
@@ -18,11 +24,19 @@ import { IdempotencyEntity } from './entities/idempotency.entity';
     }),
     TypeOrmModule.forFeature([OrderEntity]),
     ScheduleModule.forRoot(),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+      },
+    }),
+    TerminusModule,
     OrdersModule,
   ],
+  controllers: [HealthController],
   providers: [SagaTimeoutService],
 })
-export class AppModule {}
-
-
-
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationMiddleware).forRoutes('*');
+  }
+}

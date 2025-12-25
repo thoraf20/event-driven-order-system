@@ -1,14 +1,27 @@
 import { NestFactory } from '@nestjs/core';
 import { Transport } from '@nestjs/microservices';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
   
+  app.useLogger(app.get(Logger));
   app.useGlobalPipes(new ValidationPipe());
 
+  const config = new DocumentBuilder()
+    .setTitle('Order Service API')
+    .setDescription('The Order Service API for the Event-Driven Order Processing System')
+    .setVersion('1.0')
+    .addTag('orders')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   app.connectMicroservice({
+
     transport: Transport.RMQ,
     options: {
       urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
