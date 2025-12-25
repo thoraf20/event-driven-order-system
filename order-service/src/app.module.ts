@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { OrdersModule } from './orders/orders.module';
+import { SagaTimeoutService } from './saga-timeout.service';
 import { OrderEntity } from './entities/order.entity';
 import { OrderItemEntity } from './entities/order-item.entity';
 import { OrderEventEntity } from './entities/order-event.entity';
@@ -14,8 +16,13 @@ import { IdempotencyEntity } from './entities/idempotency.entity';
       entities: [OrderEntity, OrderItemEntity, OrderEventEntity, IdempotencyEntity],
       synchronize: true,
     }),
+    TypeOrmModule.forFeature([OrderEntity]),
+    ScheduleModule.forRoot(),
     OrdersModule,
   ],
+  providers: [SagaTimeoutService],
 })
 export class AppModule {}
+
+
 

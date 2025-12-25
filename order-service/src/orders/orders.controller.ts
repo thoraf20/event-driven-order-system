@@ -1,9 +1,10 @@
 import { Controller, Post, Get, Body, Param, Logger } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
+import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import { OrderStatus } from '@app/common';
 import { OrdersService } from './orders.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateOrderDto } from '../dto/create-order.dto';
+
 
 @Controller('orders')
 export class OrdersController {
@@ -30,50 +31,96 @@ export class OrdersController {
   }
 
   @EventPattern('payment.processed')
-  async handlePaymentProcessed(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
-    if (!isNew) return;
-
-    this.logger.log(`Received payment.processed for order: ${data.orderId}`);
-    await this.ordersService.updateStatus(data.orderId, OrderStatus.PAYMENT_COMPLETED);
+  async handlePaymentProcessed(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
+    
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
+      if (isNew) {
+        this.logger.log(`Received payment.processed for order: ${data.orderId}`);
+        await this.ordersService.updateStatus(data.orderId, OrderStatus.PAYMENT_COMPLETED);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing payment.processed: ${error.message}`);
+      channel.nack(originalMsg, false, false); // Move to DLQ
+    }
   }
 
   @EventPattern('payment.failed')
-  async handlePaymentFailed(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
-    if (!isNew) return;
+  async handlePaymentFailed(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received payment.failed for order: ${data.orderId}`);
-    await this.ordersService.failOrder(data.orderId, data.reason);
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
+      if (isNew) {
+        this.logger.log(`Received payment.failed for order: ${data.orderId}`);
+        await this.ordersService.failOrder(data.orderId, data.reason);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing payment.failed: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 
   @EventPattern('inventory.reserved')
-  async handleInventoryReserved(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
-    if (!isNew) return;
+  async handleInventoryReserved(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received inventory.reserved for order: ${data.orderId}`);
-    await this.ordersService.completeOrder(data.orderId);
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
+      if (isNew) {
+        this.logger.log(`Received inventory.reserved for order: ${data.orderId}`);
+        await this.ordersService.completeOrder(data.orderId);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing inventory.reserved: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 
   @EventPattern('inventory.reservation_failed')
-  async handleInventoryFailed(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
-    if (!isNew) return;
+  async handleInventoryFailed(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received inventory.failed for order: ${data.orderId}`);
-    await this.ordersService.compensateOrder(data.orderId, data.reason);
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
+      if (isNew) {
+        this.logger.log(`Received inventory.failed for order: ${data.orderId}`);
+        await this.ordersService.compensateOrder(data.orderId, data.reason);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing inventory.failed: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 
   @EventPattern('payment.refunded')
-  async handlePaymentRefunded(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
-    if (!isNew) return;
+  async handlePaymentRefunded(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received payment.refunded for order: ${data.orderId}`);
-    await this.ordersService.failOrder(data.orderId, 'Payment refunded successfully');
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
+      if (isNew) {
+        this.logger.log(`Received payment.refunded for order: ${data.orderId}`);
+        await this.ordersService.failOrder(data.orderId, 'Payment refunded successfully');
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing payment.refunded: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 }
+
 
 
 

@@ -1,5 +1,5 @@
 import { Controller, Logger } from '@nestjs/common';
-import { EventPattern, Payload } from '@nestjs/microservices';
+import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import { InventoryService } from './inventory.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 
@@ -13,28 +13,41 @@ export class InventoryController {
   ) {}
 
   @EventPattern('payment.processed')
-  async handlePaymentProcessed(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'inventory-service');
-    if (!isNew) {
-      this.logger.warn(`Duplicate payment.processed event received: ${data.eventId}`);
-      return;
-    }
+  async handlePaymentProcessed(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received payment.processed event for order: ${data.orderId}`);
-    await this.inventoryService.reserveStock(data);
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'inventory-service');
+      if (isNew) {
+        this.logger.log(`Received payment.processed event for order: ${data.orderId}`);
+        await this.inventoryService.reserveStock(data);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing payment.processed: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 
   @EventPattern('order.failed')
-  async handleOrderFailed(@Payload() data: any) {
-    const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'inventory-service');
-    if (!isNew) {
-      this.logger.warn(`Duplicate order.failed event received: ${data.eventId}`);
-      return;
-    }
+  async handleOrderFailed(@Payload() data: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
 
-    this.logger.log(`Received order.failed for order: ${data.orderId}. Releasing stock if any.`);
-    await this.inventoryService.releaseStock(data.orderId);
+    try {
+      const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'inventory-service');
+      if (isNew) {
+        this.logger.log(`Received order.failed for order: ${data.orderId}. Releasing stock if any.`);
+        await this.inventoryService.releaseStock(data.orderId);
+      }
+      channel.ack(originalMsg);
+    } catch (error) {
+      this.logger.error(`Error processing order.failed: ${error.message}`);
+      channel.nack(originalMsg, false, false);
+    }
   }
 }
+
 
 

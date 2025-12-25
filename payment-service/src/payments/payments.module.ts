@@ -19,10 +19,15 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
           urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
           queue: process.env.RABBITMQ_PAYMENT_QUEUE || 'payment_queue',
           queueOptions: {
-            durable: false,
+            durable: true,
+            arguments: {
+              'x-dead-letter-exchange': 'payment_service_dlx',
+              'x-dead-letter-routing-key': 'payment_service_dlq',
+            },
           },
         },
       },
+
     ]),
   ],
   controllers: [PaymentsController],
