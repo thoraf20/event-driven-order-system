@@ -1,0 +1,8 @@
+{
+  "name": "@app/common",
+  "version": "1.0.0",
+  "description": "Shared types and events for the Order System",
+  "main": "index.ts",
+  "private": true,
+  "dependencies": {}
+}
