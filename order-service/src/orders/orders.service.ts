@@ -27,7 +27,15 @@ export class OrdersService {
 
   async failOrder(orderId: string, reason: string) {
     await this.updateStatus(orderId, OrderStatus.FAILED, { reason });
+    
+    this.client.emit('order.failed', {
+      orderId,
+      reason,
+      eventId: uuidv4(),
+      timestamp: new Date(),
+    });
   }
+
 
   async compensateOrder(orderId: string, reason: string) {
     const order = await this.findOne(orderId);
@@ -35,7 +43,6 @@ export class OrdersService {
 
     await this.updateStatus(orderId, OrderStatus.COMPENSATING, { reason });
 
-    // Trigger compensation: Refund Payment
     this.client.emit('payment.refund', {
       orderId,
       amount: Number(order.total_amount),
@@ -48,7 +55,6 @@ export class OrdersService {
   async updateStatus(orderId: string, status: OrderStatus, metadata: any = {}) {
     await this.ordersRepository.update(orderId, { status });
     
-    // Log to Event Store
     const orderEvent = this.eventsRepository.create({
       order_id: orderId,
       event_type: `OrderStatusChanged:${status}`,
@@ -82,7 +88,6 @@ export class OrdersService {
 
       const savedOrder = await queryRunner.manager.save(order);
 
-      // Save Event to Event Store
       const eventPayload: OrderCreatedPayload = {
         orderId: savedOrder.id,
         customerId: savedOrder.customer_id,
@@ -102,7 +107,6 @@ export class OrdersService {
 
       await queryRunner.manager.save(orderEvent);
 
-      // Publish Event to RabbitMQ
       this.client.emit('order.created', {
         ...eventPayload,
         eventId: uuidv4(),

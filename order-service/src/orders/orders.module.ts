@@ -6,11 +6,14 @@ import { OrdersController } from './orders.controller';
 import { OrderEntity } from '../entities/order.entity';
 import { OrderItemEntity } from '../entities/order-item.entity';
 import { OrderEventEntity } from '../entities/order-event.entity';
+import { IdempotencyModule } from '../idempotency/idempotency.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([OrderEntity, OrderItemEntity, OrderEventEntity]),
+    IdempotencyModule,
     ClientsModule.register([
+
       {
         name: 'ORDER_SERVICE',
         transport: Transport.RMQ,

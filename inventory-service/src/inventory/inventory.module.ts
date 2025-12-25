@@ -5,11 +5,14 @@ import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
 import { ProductEntity } from '../entities/product.entity';
 import { InventoryReservationEntity } from '../entities/inventory-reservation.entity';
+import { IdempotencyModule } from '../idempotency/idempotency.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ProductEntity, InventoryReservationEntity]),
+    IdempotencyModule,
     ClientsModule.register([
+
       {
         name: 'INVENTORY_SERVICE',
         transport: Transport.RMQ,
