@@ -11,6 +11,8 @@ import { CreateOrderDto } from '../dto/create-order.dto';
 import { OrderStatus, OrderCreatedPayload } from '@app/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { v4 as uuidv4 } from 'uuid';
+import { CircuitBreakerService, CircuitState } from './circuit-breaker.service';
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 @Injectable({ scope: Scope.REQUEST })
 export class OrdersService {
@@ -24,6 +26,7 @@ export class OrdersService {
     private client: ClientProxy,
     @Inject(REQUEST) 
     private readonly request: Request,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {}
 
   async completeOrder(orderId: string) {
@@ -71,6 +74,14 @@ export class OrdersService {
 
 
   async create(createOrderDto: CreateOrderDto) {
+    const cbStatus = await this.circuitBreaker.check('payment-service');
+    if (cbStatus === CircuitState.OPEN) {
+      throw new HttpException(
+        'Payment service is currently unavailable. Please try again later.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

@@ -4,6 +4,7 @@ import { OrderStatus } from '@app/common';
 import { OrdersService } from './orders.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateOrderDto } from '../dto/create-order.dto';
+import { CircuitBreakerService } from './circuit-breaker.service';
 
 
 @Controller('orders')
@@ -13,6 +14,7 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly idempotencyService: IdempotencyService,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {}
 
   @Post()
@@ -40,6 +42,7 @@ export class OrdersController {
       if (isNew) {
         this.logger.log(`Received payment.processed for order: ${data.orderId}`);
         await this.ordersService.updateStatus(data.orderId, OrderStatus.PAYMENT_COMPLETED);
+        await this.circuitBreaker.recordSuccess('payment-service');
       }
       channel.ack(originalMsg);
     } catch (error) {
@@ -58,6 +61,7 @@ export class OrdersController {
       if (isNew) {
         this.logger.log(`Received payment.failed for order: ${data.orderId}`);
         await this.ordersService.failOrder(data.orderId, data.reason);
+        await this.circuitBreaker.recordFailure('payment-service');
       }
       channel.ack(originalMsg);
     } catch (error) {

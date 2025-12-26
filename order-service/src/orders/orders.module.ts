@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
+import { CircuitBreakerService } from './circuit-breaker.service';
 import { OrderEntity } from '../entities/order.entity';
 import { OrderItemEntity } from '../entities/order-item.entity';
 import { OrderEventEntity } from '../entities/order-event.entity';
@@ -33,6 +34,6 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
     ]),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, CircuitBreakerService],
 })
 export class OrdersModule {}
