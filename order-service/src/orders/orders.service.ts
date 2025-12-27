@@ -24,6 +24,8 @@ export class OrdersService {
     private dataSource: DataSource,
     @Inject('ORDER_SERVICE') 
     private client: ClientProxy,
+    @Inject('RETRY_SERVICE')
+    private readonly retryClient: ClientProxy,
     @Inject(REQUEST) 
     private readonly request: Request,
     private readonly circuitBreaker: CircuitBreakerService,
@@ -75,12 +77,7 @@ export class OrdersService {
 
   async create(createOrderDto: CreateOrderDto) {
     const cbStatus = await this.circuitBreaker.check('payment-service');
-    if (cbStatus === CircuitState.OPEN) {
-      throw new HttpException(
-        'Payment service is currently unavailable. Please try again later.',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
+    const isCircuitOpen = cbStatus === CircuitState.OPEN;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -94,7 +91,7 @@ export class OrdersService {
       const order = this.ordersRepository.create({
         customer_id: customerId,
         total_amount: totalAmount,
-        status: OrderStatus.PENDING,
+        status: isCircuitOpen ? OrderStatus.PENDING_RETRY : OrderStatus.PENDING,
         items: items.map(item => ({
           product_id: item.productId,
           quantity: item.quantity,
@@ -125,12 +122,18 @@ export class OrdersService {
 
       const correlationId = this.request.headers['x-correlation-id'] as string;
 
-      this.client.emit('order.created', {
+      const eventData = {
         ...eventPayload,
         eventId: uuidv4(),
         timestamp: new Date(),
         correlationId,
-      });
+      };
+
+      if (isCircuitOpen) {
+        this.retryClient.emit('order.created', eventData);
+      } else {
+        this.client.emit('order.created', eventData);
+      }
 
 
       await queryRunner.commitTransaction();
