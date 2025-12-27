@@ -30,6 +30,22 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
           },
         },
       },
+      {
+        name: 'RETRY_SERVICE',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
+          queue: 'order_retry_queue',
+          queueOptions: {
+            durable: true,
+            arguments: {
+              'x-message-ttl': 30000, // 30 seconds
+              'x-dead-letter-exchange': '', // Default exchange
+              'x-dead-letter-routing-key': process.env.RABBITMQ_ORDER_QUEUE || 'order_queue',
+            },
+          },
+        },
+      },
 
     ]),
   ],

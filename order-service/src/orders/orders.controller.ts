@@ -5,6 +5,8 @@ import { OrdersService } from './orders.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateOrderDto } from '../dto/create-order.dto';
 import { CircuitBreakerService } from './circuit-breaker.service';
+import { ClientProxy } from '@nestjs/microservices';
+import { Inject } from '@nestjs/common';
 
 
 @Controller('orders')
@@ -15,6 +17,8 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly idempotencyService: IdempotencyService,
     private readonly circuitBreaker: CircuitBreakerService,
+    @Inject('RETRY_SERVICE')
+    private readonly retryClient: ClientProxy,
   ) {}
 
   @Post()
@@ -41,6 +45,14 @@ export class OrdersController {
       const isNew = await this.idempotencyService.checkAndSaveKey(data.eventId, 'order-service');
       if (isNew) {
         this.logger.log(`Received payment.processed for order: ${data.orderId}`);
+      
+        const inventoryCircuit = await this.circuitBreaker.check('inventory-service');
+        if (inventoryCircuit === 'OPEN') {
+          this.logger.warn(`Inventory circuit is OPEN. Routing payment.processed for order ${data.orderId} to retry exchange.`);
+          this.retryClient.emit('payment.processed', data);
+          return channel.ack(originalMsg); // Ack from main queue, let retry queue handle it
+        }
+
         await this.ordersService.updateStatus(data.orderId, OrderStatus.PAYMENT_COMPLETED);
         await this.circuitBreaker.recordSuccess('payment-service');
       }
